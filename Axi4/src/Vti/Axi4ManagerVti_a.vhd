@@ -1,6 +1,6 @@
 --
---  File Name:         Axi4ManagerVti.vhd
---  Design Unit Name:  Axi4ManagerVti
+--  File Name:         Axi4ManagerVti_a.vhd
+--  Design Unit Name:  VerificationComponent of Axi4ManagerVti
 --  Revision:          OSVVM MODELS STANDARD VERSION
 --
 --  Maintainer:        Jim Lewis      email:  jim@synthworks.com
@@ -19,6 +19,9 @@
 --
 --  Revision History:
 --    Date      Version    Description
+--    10/2025   2025.10    Split entity and architecture to support 2019 interfaces
+--                         Moved MODEL_INSTANCE_NAME to architecture 
+--                         renamed architecture VerificationComponent
 --    07/2024   2024.07    Shortened AlertLog and data structure names for better printing
 --    03/2024   2024.03    Updated SafeResize to use ModelID
 --    01/2024   2024.01    Updated Params to use singleton data structure
@@ -30,10 +33,10 @@
 --    03/2022   2022.03    Updated calls to NewID for AlertLogID and FIFOs
 --    02/2022   2022.02    Replaced to_hstring with to_hxstring
 --    01/2022   2022.01    Moved MODEL_INSTANCE_NAME and MODEL_NAME to entity declarative region
---    07/2021   2021.07    All FIFOs and Scoreboards now use the New Scoreboard/FIFO capability 
+--    07/2021   2021.07    All FIFOs and Scoreboards now use the New Scoreboard/FIFO capability
 --    06/2021   2021.06    GHDL support + New Burst FIFOs 
 --    02/2021   2021.02    Added MultiDriver Detect.  Added Valid Delays.  Updated Generics.   
---    12/2020   2020.12    Added Burst Word Mode.  Refactored code.  Added VTI
+--    12/2020   2020.12    Added Burst Word Mode.  Refactored code.  
 --    07/2020   2020.07    Created Axi4 FULL from Axi4Lite
 --    01/2020   2020.01    Updated license notice
 --    04/2018   2018.04    First Release
@@ -42,7 +45,7 @@
 --
 --  This file is part of OSVVM.
 --
---  Copyright (c) 2017 - 2023 by SynthWorks Design Inc.
+--  Copyright (c) 2017 - 2025 by SynthWorks Design Inc.
 --
 --  Licensed under the Apache License, Version 2.0 (the "License");
 --  you may not use this file except in compliance with the License.
@@ -56,103 +59,11 @@
 --  See the License for the specific language governing permissions and
 --  limitations under the License.
 --
-library ieee ;
-  use ieee.std_logic_1164.all ;
-  use ieee.numeric_std.all ;
-  use ieee.numeric_std_unsigned.all ;
-  use ieee.math_real.all ;
-
-library osvvm ;
-  context osvvm.OsvvmContext ;
-  use osvvm.ScoreboardPkg_slv.all ;
-
-library osvvm_common ;
-  context osvvm_common.OsvvmCommonContext ;
-
-  use work.Axi4OptionsPkg.all ;
-  use work.Axi4ModelPkg.all ;
-  use work.Axi4InterfaceCommonPkg.all ;
-  use work.Axi4InterfacePkg.all ;
-  use work.Axi4CommonPkg.all ;
-
-entity Axi4ManagerVti is
-generic (
-  MODEL_ID_NAME    : string := "" ;
-  tperiod_Clk      : time   := 10 ns ;
-
-  DEFAULT_DELAY    : time   := 1 ns ; 
-
-  tpd_Clk_AWAddr   : time   := DEFAULT_DELAY ;
-  tpd_Clk_AWProt   : time   := DEFAULT_DELAY ;
-  tpd_Clk_AWValid  : time   := DEFAULT_DELAY ;
-  -- AXI4 Full
-  tpd_clk_AWLen    : time   := DEFAULT_DELAY ;
-  tpd_clk_AWID     : time   := DEFAULT_DELAY ;
-  tpd_clk_AWSize   : time   := DEFAULT_DELAY ;
-  tpd_clk_AWBurst  : time   := DEFAULT_DELAY ;
-  tpd_clk_AWLock   : time   := DEFAULT_DELAY ;
-  tpd_clk_AWCache  : time   := DEFAULT_DELAY ;
-  tpd_clk_AWQOS    : time   := DEFAULT_DELAY ;
-  tpd_clk_AWRegion : time   := DEFAULT_DELAY ;
-  tpd_clk_AWUser   : time   := DEFAULT_DELAY ;
-
-  tpd_Clk_WValid   : time   := DEFAULT_DELAY ;
-  tpd_Clk_WData    : time   := DEFAULT_DELAY ;
-  tpd_Clk_WStrb    : time   := DEFAULT_DELAY ;
-  -- AXI4 Full
-  tpd_Clk_WLast    : time   := DEFAULT_DELAY ;
-  tpd_Clk_WUser    : time   := DEFAULT_DELAY ;
-  -- AXI3
-  tpd_Clk_WID      : time   := DEFAULT_DELAY ;
-
-  tpd_Clk_BReady   : time   := DEFAULT_DELAY ;
-
-  tpd_Clk_ARValid  : time   := DEFAULT_DELAY ;
-  tpd_Clk_ARProt   : time   := DEFAULT_DELAY ;
-  tpd_Clk_ARAddr   : time   := DEFAULT_DELAY ;
-  -- AXI4 Full
-  tpd_clk_ARLen    : time   := DEFAULT_DELAY ;
-  tpd_clk_ARID     : time   := DEFAULT_DELAY ;
-  tpd_clk_ARSize   : time   := DEFAULT_DELAY ;
-  tpd_clk_ARBurst  : time   := DEFAULT_DELAY ;
-  tpd_clk_ARLock   : time   := DEFAULT_DELAY ;
-  tpd_clk_ARCache  : time   := DEFAULT_DELAY ;
-  tpd_clk_ARQOS    : time   := DEFAULT_DELAY ;
-  tpd_clk_ARRegion : time   := DEFAULT_DELAY ;
-  tpd_clk_ARUser   : time   := DEFAULT_DELAY ;
-
-  tpd_Clk_RReady   : time   := DEFAULT_DELAY
-) ;
-port (
-  -- Globals
-  Clk         : in   std_logic ;
-  nReset      : in   std_logic ;
-
-  -- AXI Manager Functional Interface
-  AxiBus      : inout Axi4RecType 
-) ;
-
-  -- Derive AXI interface properties from the AxiBus
-  constant AXI_ADDR_WIDTH      : integer := AxiBus.WriteAddress.Addr'length ;
-  constant AXI_DATA_WIDTH      : integer := AxiBus.WriteData.Data'length ;
-  
-  -- Testbench Transaction Interface
-  -- Access via external names
-  signal TransRec : AddressBusRecType (
-          Address      (AXI_ADDR_WIDTH-1 downto 0),
-          DataToModel  (AXI_DATA_WIDTH-1 downto 0),
-          DataFromModel(AXI_DATA_WIDTH-1 downto 0)
-        ) ;
-
+architecture VerificationComponent of Axi4ManagerVti is
   -- Derive ModelInstance label from path_name
   constant MODEL_INSTANCE_NAME : string :=
     -- use MODEL_ID_NAME Generic if set, otherwise use instance label (preferred if set as entityname_1)
-    IfElse(MODEL_ID_NAME /= "", MODEL_ID_NAME, PathTail(to_lower(Axi4ManagerVti'PATH_NAME))) ;
-
-  constant MODEL_NAME : string := "Axi4ManagerVti" ;
-
-end entity Axi4ManagerVti ;
-architecture AxiFull of Axi4ManagerVti is
+    IfElse(MODEL_ID_NAME /= "", MODEL_ID_NAME, to_lower(PathTail(Axi4ManagerVti'PATH_NAME))) ;
 
   signal ModelID, ProtocolID, DataCheckID, BusFailedID : AlertLogIDType ;
   signal WriteAddressDelayCov, WriteDataDelayCov, WriteResponseDelayCov : DelayCoverageIDType ;
@@ -192,7 +103,7 @@ begin
   ------------------------------------------------------------
   -- Turn off drivers not being driven by this model
   ------------------------------------------------------------
-  InitAxi4Rec (AxiBusRec => AxiBus) ;
+  --%%UncommentFor2008 InitAxi4Rec (AxiBusRec => AxiBus) ;
 
 
   ------------------------------------------------------------
@@ -266,6 +177,7 @@ begin
 
     variable Operation       : AddressBusOperationType ;
     variable WriteDataCount   : integer := 0 ;
+
   begin
     AxiDefaults := InitAxi4Rec(AxiDefaults, '0') ;
     LAW.Size    := to_slv(AXI_BYTE_ADDR_WIDTH, LAW.Size'length) ;
@@ -930,7 +842,7 @@ begin
 
       if UseCoverageDelays then 
         -- BurstCoverage Delays
-        (intReadyBeforeValid, ReadyDelayCycles)  := GetRandDelay(ReadDataDelayCov) ; 
+        (intReadyBeforeValid, ReadyDelayCycles)  := GetRandDelay(WriteResponseDelayCov) ; 
         ReadyBeforeValid := intReadyBeforeValid = 0 ; 
       else
         -- Deprecated static settings
@@ -1162,4 +1074,4 @@ begin
       FAILURE
     ) ;
   end process ReadDataProtocolChecker ;
-end architecture AxiFull ;
+end architecture VerificationComponent ;

@@ -1,6 +1,6 @@
 --
---  File Name:         Axi4SubordinateVti_Transactor.vhd
---  Design Unit Name:  Axi4SubordinateVti
+--  File Name:         Axi4Subordinate_a.vhd
+--  Design Unit Name:  Transactor of Axi4Subordinate
 --  Revision:          OSVVM MODELS STANDARD VERSION
 --
 --  Maintainer:        Jim Lewis      email:  jim@synthworks.com
@@ -19,6 +19,7 @@
 --
 --  Revision History:
 --    Date      Version    Description
+--    10/2025   2025.10    Split entity from architecture to simplify support of 2019 interfaces
 --    07/2024   2024.07    Shortened AlertLog and data structure names for better printing
 --    03/2024   2024.03    Updated SafeResize to use ModelID
 --    01/2024   2024.01    Updated Params to use singleton data structure
@@ -33,13 +34,13 @@
 --    07/2021   2021.07    All FIFOs and Scoreboards now use the New Scoreboard/FIFO capability 
 --    06/2021   2021.06    Updates for GHDL.   
 --    02/2021   2021.02    Added MultiDriver Detect.  Updated Generics.   
---    12/2020   2020.12    Derived VTI.
+--    12/2020   2020.12    Updated.  
 --    09/2017   2017       Initial revision
 --
 --
 --  This file is part of OSVVM.
 --
---  Copyright (c) 2017 - 2023 by SynthWorks Design Inc.
+--  Copyright (c) 2017 - 2024 by SynthWorks Design Inc.
 --
 --  Licensed under the Apache License, Version 2.0 (the "License");
 --  you may not use this file except in compliance with the License.
@@ -54,82 +55,11 @@
 --  limitations under the License.
 --
 
-library ieee ;
-  use ieee.std_logic_1164.all ;
-  use ieee.numeric_std.all ;
-  use ieee.numeric_std_unsigned.all ;
-  use ieee.math_real.all ;
-
-library osvvm ;
-  context osvvm.OsvvmContext ;
-  use osvvm.ScoreboardPkg_slv.all ;
-
-library OSVVM_Common ;
-  context OSVVM_Common.OsvvmCommonContext ;
-
-  use work.Axi4OptionsPkg.all ;
-  use work.Axi4InterfaceCommonPkg.all ;
-  use work.Axi4InterfacePkg.all ;
-  use work.Axi4ModelPkg.all ;
-  use work.Axi4CommonPkg.all ;
-
-entity Axi4SubordinateVti is
-generic (
-  MODEL_ID_NAME   : string := "" ;
-  tperiod_Clk     : time   := 10 ns ;
-
-  DEFAULT_DELAY   : time   := 1 ns ; 
-
-  tpd_Clk_AWReady : time   := DEFAULT_DELAY ;
-
-  tpd_Clk_WReady  : time   := DEFAULT_DELAY ;
-
-  tpd_Clk_BValid  : time   := DEFAULT_DELAY ;
-  tpd_Clk_BResp   : time   := DEFAULT_DELAY ;
-  tpd_Clk_BID     : time   := DEFAULT_DELAY ;
-  tpd_Clk_BUser   : time   := DEFAULT_DELAY ;
-
-  tpd_Clk_ARReady : time   := DEFAULT_DELAY ;
-
-  tpd_Clk_RValid  : time   := DEFAULT_DELAY ;
-  tpd_Clk_RData   : time   := DEFAULT_DELAY ;
-  tpd_Clk_RResp   : time   := DEFAULT_DELAY ;
-  tpd_Clk_RID     : time   := DEFAULT_DELAY ;
-  tpd_Clk_RUser   : time   := DEFAULT_DELAY ;
-  tpd_Clk_RLast   : time   := DEFAULT_DELAY
-) ;
-port (
-  -- Globals
-  Clk         : in   std_logic ;
-  nReset      : in   std_logic ;
-
-
-  -- AXI Manager Functional Interface
-  AxiBus      : inout Axi4RecType 
-) ;
-
-  -- Derive AXI interface properties from the AxiBus
-  constant AXI_ADDR_WIDTH : integer := AxiBus.WriteAddress.Addr'length ;
-  constant AXI_DATA_WIDTH : integer := AxiBus.WriteData.Data'length ;
-
-  -- Testbench Transaction Interface
-  -- Access via external names
-  signal TransRec : AddressBusRecType (
-          Address      (AXI_ADDR_WIDTH-1 downto 0),
-          DataToModel  (AXI_DATA_WIDTH-1 downto 0),
-          DataFromModel(AXI_DATA_WIDTH-1 downto 0)
-        ) ;
-
+architecture Transactor of Axi4Subordinate is
   -- Derive ModelInstance label from path_name
+  -- use MODEL_ID_NAME Generic if set, otherwise use instance label (preferred if set as entityname_1)
   constant MODEL_INSTANCE_NAME : string :=
-    -- use MODEL_ID_NAME Generic if set, otherwise use instance label (preferred if set as entityname_1)
-    IfElse(MODEL_ID_NAME /= "", MODEL_ID_NAME, PathTail(to_lower(Axi4SubordinateVti'PATH_NAME))) ;
-
-  constant MODEL_NAME : string := "Axi4SubordinateVti" ;
-
-end entity Axi4SubordinateVti ;
-
-architecture Transactor of Axi4SubordinateVti is
+    IfElse(MODEL_ID_NAME /= "", MODEL_ID_NAME, PathTail(to_lower(Axi4Subordinate'PATH_NAME))) ;
 
   signal ModelID, ProtocolID, DataCheckID, BusFailedID : AlertLogIDType ;
   signal WriteAddressDelayCov, WriteDataDelayCov, WriteResponseDelayCov : DelayCoverageIDType ;
@@ -178,7 +108,7 @@ begin
   ------------------------------------------------------------
   -- Turn off drivers not being driven by this model
   ------------------------------------------------------------
-  InitAxi4Rec (AxiBusRec => AxiBus ) ;
+  --%%UncommentFor2008 InitAxi4Rec (AxiBusRec => AxiBus) ;
 
 
   ------------------------------------------------------------
@@ -252,10 +182,10 @@ begin
 --    TransRec.WriteBurstFifo <= NewID("WriteBurstFifo",         ModelID, Search => PRIVATE_NAME) ;
 --    TransRec.ReadBurstFifo  <= NewID("ReadBurstFifo",          ModelID, Search => PRIVATE_NAME) ;
     WriteAddressDelayCov    <= NewID("WriteAddrDelayCov",   ModelID, ReportMode => DISABLED) ; 
-    WriteDataDelayCov       <= NewID("WriteDataDelayCov",      ModelID, ReportMode => DISABLED) ; 
-    WriteResponseDelayCov   <= NewID("WriteRespDelayCov",  ModelID, ReportMode => DISABLED) ; 
+    WriteDataDelayCov       <= NewID("WriteDataDelayCov",   ModelID, ReportMode => DISABLED) ; 
+    WriteResponseDelayCov   <= NewID("WriteRespDelayCov",   ModelID, ReportMode => DISABLED) ; 
     ReadAddressDelayCov     <= NewID("ReadAddrDelayCov",    ModelID, ReportMode => DISABLED) ; 
-    ReadDataDelayCov        <= NewID("ReadDataDelayCov",       ModelID, ReportMode => DISABLED) ; 
+    ReadDataDelayCov        <= NewID("ReadDataDelayCov",    ModelID, ReportMode => DISABLED) ; 
 
     DispatchLoop : loop
       WaitForTransaction(
@@ -534,7 +464,8 @@ begin
 
         -- The End -- Done
         when others =>
-          Alert(ModelID, ClassifyUnimplementedOperation(TransRec.Operation, TransRec.Rdy), FAILURE) ;
+          -- Signal multiple Driver Detect or not implemented transactions.
+          Alert(ModelID, ClassifyUnimplementedOperation(TransRec), FAILURE) ;
 
       end case ;
 
@@ -912,8 +843,8 @@ begin
       RD.Valid <= '0' after tpd_Clk_RValid ;
       RD.Data  <= not Local.Data after tpd_clk_RData ;
       RD.Resp  <= not Local.Resp after tpd_Clk_RResp ;
-      RD.ID    <= not ModelRID    after tpd_Clk_RID ; 
-      RD.User  <= not ModelRUser  after tpd_Clk_RUser ; 
+      RD.ID    <= not ModelRID   after tpd_Clk_RID ; 
+      RD.User  <= not ModelRUser after tpd_Clk_RUser ; 
       RD.Last  <= '0'            after tpd_Clk_RLast ;
 
       -- Signal completion
